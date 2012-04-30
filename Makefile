@@ -12,9 +12,9 @@ all: build
 neko: $(SRC)
 	$(HX) -neko $(OUT)/$(PROJECT).n
 
-#cpp: $(SRC)
-	#$(HX) -cpp out --remap neko:cpp
-	#mv out/CyberChrist ./$(PROJECT)
+cpp: $(SRC)
+	$(HX) -cpp out --remap neko:cpp
+	mv out/CyberChrist ./$(PROJECT)
 
 build: neko
 

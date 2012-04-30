@@ -35,6 +35,7 @@ private typedef Site = {
 private typedef Post = { > Site,
 	var id : String;
 	var path : String;
+	var keywords : String;
 }
 
 /**
@@ -145,6 +146,9 @@ class CyberChrist {
 			} else {
 				if( f.startsWith( "_" ) ) {
 					// ignore files starting with an underscore
+				} else if( f == "htaccess" ) {
+					//TODO
+					//trace("TOOOOOOOOOOOOOOOO");
 				} else {
 					var i = f.lastIndexOf(".");
 					if( i == -1 ) {
@@ -204,12 +208,11 @@ class CyberChrist {
 			case "css":
 				s.css.push(v);
 			case "tags":
-				var r = ~/( *, *)/g;
-				if( !r.match( v ) ) {
-					warn( "invalid syntax for header tags: "+v );
-					continue;
+				s.tags = new Array();
+				var tags = v.split( "," );
+				for( t in tags ) {
+					s.tags.push( t.trim() );
 				}
-				s.tags = r.split(  v );
 			case "description":
 				s.description = v;
 			case "author":
@@ -263,10 +266,13 @@ class CyberChrist {
 				html : site.html,
 				layout : null,
 				date : date,
-				tags : new Array<String>(),
+				//tags : new Array<String>(),
 				description : (site.description==null) ? ((defaultSiteDescription==null)?null:defaultSiteDescription) : site.description,
 				author : (site.author==null) ? defaultAuthor : site.author,
-				//keywords : ["disktree","panzerkunst","art"],
+				
+				tags : site.tags, //["disktree","panzerkunst","art"],
+				keywords : ( site.tags != null ) ? site.tags.join(",") : null,
+
 				css : new Array<String>(),
 				path : null
 			};
@@ -300,12 +306,12 @@ class CyberChrist {
 			return 0;
 		});
 		
-		// print posts html
+		// write posts html
 		var tpl = parseSite( path_src+"_layout", "post.html" );
 		print("Posts");
 		for( p in posts ) {
 			var ctx = mixContext( {}, p );
-			ctx.content = new Template( tpl.content ).execute( p  );
+			ctx.content = new Template( tpl.content ).execute( p );
 			writeHTMLSite( path_dst + p.path, ctx );
 			print(".");
 		}
@@ -313,7 +319,7 @@ class CyberChrist {
 	}
 	
 	/**
-		Create the base context for printing templates of any file.
+		Create the base context for printing templates from anything.
 	*/
 	static function createBaseContext( ?attach : Dynamic ) : Dynamic {
 		

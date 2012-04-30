@@ -1,10 +1,16 @@
 
 CYBERCHRIST
 ===========
-Static blog generator tool for satanists.
+Static blog generator tool for satanists aka http://blog.disktree.net
+
+
+USAGE
+-----
+Check cyberchrist/test for an example blog
 
 
 LINKS
 -----
-http://blog.disktree.net/2012/03/22/cyberchrist-blog-engine.html
+https://github.com/tong/cyberchrist
 https://github.com/tong/panda
+http://blog.disktree.net/2012/03/22/cyberchrist-blog-engine.html
