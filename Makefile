@@ -10,16 +10,18 @@ OUT = ./
 all: build
 
 neko: $(SRC)
-	$(HX) -neko $(OUT)/$(PROJECT).n
+	$(HX) -neko $(OUT)/$(PROJECT).n \
+		#--no-traces
 
 cpp: $(SRC)
-	$(HX) -cpp out --remap neko:cpp
+	$(HX) -cpp out --remap neko:cpp \
+		#--no-traces
 	mv out/CyberChrist ./$(PROJECT)
 
 build: neko
 
-test: build
-	(cd test;neko ./../cyberchrist.n)
+#test: build
+#	(cd test;neko ./../cyberchrist.n )
 
 clean:
 	rm -f $(OUT)/$(PROJECT).n

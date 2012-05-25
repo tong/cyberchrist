@@ -1,4 +1,5 @@
 
+import haxe.Timer;
 import neko.Lib;
 import neko.Sys;
 import neko.FileSystem;
@@ -7,12 +8,21 @@ import haxe.Template;
 
 using StringTools;
 
-private typedef DateTime = {
+private typedef Config = {
+	url : String,
+	src : String,
+	dst : String,
+	title : String,
+	description : String,
+	//keywords : Array<String>
+	num_posts : Int, // num posts shown on index site
+	img : String
+}
 
+private typedef DateTime = {
 	var year : Int;
 	var month : Int;
 	var day : Int;
-
 	var utc : String;
 	var datestring : String;
 	//var pub : String;
@@ -39,7 +49,7 @@ private typedef Post = { > Site,
 }
 
 /**
-	Cyberchrist template fucker.
+	Cyberchrist template fucker for blogs and shit.
 	Holy moly!!
 */
 class CyberChrist {
@@ -50,19 +60,14 @@ class CyberChrist {
 	static var e_header_line = ~/^ *([a-zA-Z0-9_\/\.\-]+) *: *([a-zA-Z0-9!_,\/\.\-\?\(\)\s]+) *$/;
 	static var e_post_filename = ~/^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])-([a-zA-Z0-9_,!\.\-\?\(\)\+]+)$/;
 	
-	static var numPostsShown = 23;
-	static var defaultSiteDescription : String = null;
-	static var defaultAuthor = "tong";
-
-	static var path_src : String;
-	static var path_dst : String;
+	static var cfg : Config;
 	static var tpl_site : Template;
 	static var posts : Array<Post>;
 	static var panda : Panda;
 	
-	
 	// --------------- SYSTEM ---------------
 	
+	static inline function prnt( t : String ) Lib.print(t)
 	static inline function print( t : String ) Lib.print(t)
 	static inline function println( t : String ) Lib.println(t)
 	static inline function warn( t : String ) println( "Warning! "+t )
@@ -96,10 +101,10 @@ class CyberChrist {
 	}
 	
 	static function copyDataDirectory( path : String ) {
-		var ps = path_src+path;
+		var ps = cfg.src + path;
 		for( f in FileSystem.readDirectory( ps ) ) {
-			var s = ps+"/"+f;
-			var d = path_dst+path+"/"+f;
+			var s = ps + "/" + f;
+			var d = cfg.dst + path + "/" + f;
 			if( FileSystem.isDirectory( s ) ) {
 				if( !FileSystem.exists(d) )
 					FileSystem.createDirectory( d );
@@ -138,7 +143,7 @@ class CyberChrist {
 					}
 					*/
 				} else {
-					var d = path_dst+f;
+					var d = cfg.dst+f;
 					if( !FileSystem.exists(d) )
 						FileSystem.createDirectory( d );
 					copyDataDirectory( f );
@@ -147,8 +152,7 @@ class CyberChrist {
 				if( f.startsWith( "_" ) ) {
 					// ignore files starting with an underscore
 				} else if( f == "htaccess" ) {
-					//TODO
-					//trace("TOOOOOOOOOOOOOOOO");
+					// TODO: process htaccess file(s)
 				} else {
 					var i = f.lastIndexOf(".");
 					if( i == -1 ) {
@@ -163,7 +167,7 @@ class CyberChrist {
 							for( p in _posts ) {
 								//p.content = StringTools.htmlEscape( p.content );
 							}
-							writeFile( path_dst+f, tpl.execute( ctx ) );
+							writeFile( cfg.dst+f, tpl.execute( ctx ) );
 						case "html" :
 							var site = parseSite( path, f );
 							var tpl = new Template( site.content );
@@ -171,12 +175,19 @@ class CyberChrist {
 							ctx = createBaseContext();
 							ctx.content = content;
 							ctx.html = content;
-							writeHTMLSite( path_dst+f, ctx );
+							//trace(site.title);
+							if( site.title != null ) ctx.title = site.title;
+							if( site.description != null ) ctx.description = site.description;
+							if( site.tags != null ) ctx.keywords = site.tags.join(",");
+							writeHTMLSite( cfg.dst+f, ctx );
 						//case "css" :
 						//TODO do css compressions here
 						//	File.copy( fp, path_dst+f );
 						default:
-							File.copy( fp, path_dst+f );
+							
+							//TODO check plugins .....
+
+							File.copy( fp, cfg.dst+f );
 						}
 					}
 				}
@@ -192,7 +203,9 @@ class CyberChrist {
 		var ft = File.getContent( fp );
 		if( !e_site.match( ft ) )
 			error( "invalid html template ("+fp+")" );
-		var s : Site = cast { css : new Array<String>()};
+		var s : Site = cast {
+			css : new Array<String>()
+		};
 		for( l in e_site.matched(1).trim().split("\n") ) {
 			if( ( l = l.trim() ) == "" )
 				continue;
@@ -267,8 +280,10 @@ class CyberChrist {
 				layout : null,
 				date : date,
 				//tags : new Array<String>(),
-				description : (site.description==null) ? ((defaultSiteDescription==null)?null:defaultSiteDescription) : site.description,
-				author : (site.author==null) ? defaultAuthor : site.author,
+				//description : (site.description==null) ? ((defaultSiteDescription==null)?null:defaultSiteDescription) : site.description,
+				description : site.description,
+				author : site.author,
+				//author : (site.author==null) ? defaultAuthor : site.author,
 				
 				tags : site.tags, //["disktree","panzerkunst","art"],
 				keywords : ( site.tags != null ) ? site.tags.join(",") : null,
@@ -277,7 +292,7 @@ class CyberChrist {
 				path : null
 			};
 
-			var path = path_dst + formatTimePart( d_year );
+			var path = cfg.dst + formatTimePart( d_year );
 			if( !FileSystem.exists( path ) ) FileSystem.createDirectory( path );
 			path = path+"/" + formatTimePart( d_month );
 			if( !FileSystem.exists( path ) ) FileSystem.createDirectory( path );
@@ -307,15 +322,15 @@ class CyberChrist {
 		});
 		
 		// write posts html
-		var tpl = parseSite( path_src+"_layout", "post.html" );
-		print("Posts");
+		var tpl = parseSite( cfg.src+"_layout", "post.html" );
+		prnt("Posts");
 		for( p in posts ) {
 			var ctx = mixContext( {}, p );
 			ctx.content = new Template( tpl.content ).execute( p );
-			writeHTMLSite( path_dst + p.path, ctx );
-			print(".");
+			writeHTMLSite( cfg.dst + p.path, ctx );
+			prnt(".");
 		}
-		print("("+posts.length+")");
+		prnt("("+posts.length+")");
 	}
 	
 	/**
@@ -325,9 +340,9 @@ class CyberChrist {
 		
 		var _posts = posts;
 		var _archive = new Array<Post>();
-		if( posts.length > numPostsShown ) {
-			_archive = _posts.slice( numPostsShown );
-			_posts = _posts.slice( 0, numPostsShown );
+		if( posts.length > cfg.num_posts ) {
+			_archive = _posts.slice( cfg.num_posts );
+			_posts = _posts.slice( 0, cfg.num_posts );
 		}
 
 		var n = Date.now();
@@ -342,10 +357,9 @@ class CyberChrist {
 			utc : formatUTC( dy, dm, dd )
 		}
 
-		//TODO
-		// default context
+		//TODO: default context
 		var ctx = {
-			title : "blog.disktree.net",
+			title : cfg.title, //"blog.disktree.net",
 			url : "http://blog.disktree.net",
 			posts : _posts,
 			archive : _archive,
@@ -403,28 +417,77 @@ class CyberChrist {
 		if( info != null ) println( "ERROR: "+info );
 		Sys.exit(0);
 	}
+
+	static function appendSlash( t : String ) : String {
+		return ( t.charAt( t.length ) != "/" ) ? t+"/" : t;
+	}
 	
 	static function main() {
 		
 		println( "CyberChrist "+VERSION );
 		
-		path_src = "src/";
-		path_dst = "www/";
-		
-		var timestart = haxe.Timer.stamp();
-
 		//TODO read cl params
-		//TODO read config file
+		//var args = Sys.args();
+		//println( "######################### "+args );
+		//....
+		
+		var ts_start = Timer.stamp();
 
-		// test required files
+		// --- default config
+		cfg = cast {
+			url : "http://blog.disktree.net",
+			src : "src/",
+			dst : "www/",
+			num_posts : 10,
+			img : "/img/"
+		};
+
+		// --- read config file
+		var ereg = ~/^([a-zA-Z0-9-]+) *([a-zA-Z0-9 .-_]+)$/;
+		var path_cfg = 'src/_config'; //TODO
+		if( FileSystem.exists( path_cfg ) ) {
+			for( l in File.getContent( path_cfg ).split( '\n' ) ) {
+				l = l.trim();
+				var i = l.indexOf( "#" );
+				if( i == 0 )
+					continue;
+				if( i != -1 )
+					l = l.substr( 0, i );
+				if( l.length == 0 )
+					continue;
+				if( ereg.match( l ) ) {
+					var cmd = ereg.matched(1);
+					var val = ereg.matched(2).trim();
+					switch( cmd ) {
+					case "url" : cfg.url = val;
+					case "src" : cfg.src = appendSlash( val );
+					case "dst" : cfg.dst = appendSlash( val );
+					case "title" : cfg.title = val;
+					case "description", "desc" : cfg.description = val;
+					case "img", "images" : cfg.img = val;
+					case "nposts", "numposts" : cfg.num_posts = Std.parseInt( val );
+					//TODO: other config parameters
+					//case "posts-shown" : cfg.post = val;
+					//case "keywords" : cfg.url = val.split(''); //TODO regexp split
+					//case "gist"
+					default :
+						println( "Unknown configuration parameter ["+cmd+"]" );
+					}
+				}
+			}
+		} else {
+			println( 'No config file found, using default parameters' );
+		}
+
+		// --- test required files
 		var requiredFiles = [
-			path_src, path_dst,
-			path_src+'_layout', path_src+'_layout/site.html'
+			cfg.src, cfg.dst,
+			cfg.src+'_layout', cfg.src+'_layout/site.html'
 		];
 		var errors = new Array<String>();
 		for( f in requiredFiles ) {
 			if( !FileSystem.exists( f ) )
-				errors.push( 'file missing:'+path_src+''+f+')' );
+				errors.push( 'file missing:'+cfg.src+''+f+')' );
 		}
 		if( errors.length > 0 ) {
 			println( "Holy shit! ERROR" );
@@ -432,29 +495,29 @@ class CyberChrist {
 			Sys.exit(0);
 		}
 		
-		/////////////
+		///////////// --- build
 
 		posts = new Array();
-
-		// prepare templates
-		tpl_site = new Template( File.getContent( path_src+'_layout/site.html' ) );
-
-		// prepeare panda content formatter
+		
+		// ---- prepeare panda content formatter
 		panda = new Panda( {
-			path_img : "/img/",
+			path_img : cfg.img,
 			createLink : function(s){return s;}
 		} );
-		
-		// clear target directory
-		clearDirectory( path_dst );
-		
-		// write posts
-		printPosts( path_src+"_posts" );
 
-		// write everything else
-		processDirectory( path_src );
+		// ---- prepare templates
+		tpl_site = new Template( File.getContent( cfg.src+'_layout/site.html' ) );
 		
-		println( "\nOK, "+Std.int((haxe.Timer.stamp()-timestart)*1000)+"ms" );
+		// --- clear target directory
+		clearDirectory( cfg.dst );
+		
+		// ---- write posts
+		printPosts( cfg.src+"_posts" );
+
+		// ---- write everything else
+		processDirectory( cfg.src );
+		
+		println( "\nOK, "+Std.int((Timer.stamp()-ts_start)*1000)+"ms" );
 	}
 
 }
