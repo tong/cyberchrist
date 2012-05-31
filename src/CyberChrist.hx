@@ -51,6 +51,9 @@ private typedef Post = { > Site,
 /**
 	Cyberchrist template fucker for blogs and shit.
 	Holy moly!!
+	
+	TODO: custom favicon
+	
 */
 class CyberChrist {
 	
@@ -81,16 +84,6 @@ class CyberChrist {
 	static function clearDirectory( path : String ) {
 		for( f in FileSystem.readDirectory( path ) ) {
 			var p = path+"/"+f;
-			/*
-			switch( FileSystem.kind( p ) ) {
-			case kdir :
-				clearDirectory( p );
-				FileSystem.deleteDirectory( p );
-			case kfile :	
-				FileSystem.deleteFile( p );
-			default :
-			}
-			*/
 			if( FileSystem.isDirectory( p ) ) {
 				clearDirectory( p );
 				FileSystem.deleteDirectory( p );
@@ -132,12 +125,12 @@ class CyberChrist {
 					/*   
 					switch( f.substr(1) ) {
 					case "include":
-						trace("TODO process include diectory" );
+						trace(" process include diectory" );
 					//case "layout":
 					case "posts":
-						trace("TODO process posts");
+						trace(" process posts");
 					case "syndicate":
-						trace("TODO process syndication" );
+						trace(" process syndication" );
 					default:
 						warn( "Unkown cyberchrist directory ("+f+")" );
 					}
@@ -150,7 +143,7 @@ class CyberChrist {
 				}
 			} else {
 				if( f.startsWith( "_" ) ) {
-					// ignore files starting with an underscore
+					// --- ignore files starting with an underscore
 				} else if( f == "htaccess" ) {
 					// TODO: process htaccess file(s)
 				} else {
@@ -184,9 +177,7 @@ class CyberChrist {
 						//TODO do css compressions here
 						//	File.copy( fp, path_dst+f );
 						default:
-							
-							//TODO check plugins .....
-
+							//TODO: check plugins .....
 							File.copy( fp, cfg.dst+f );
 						}
 					}
@@ -231,7 +222,7 @@ class CyberChrist {
 			case "author":
 				s.author = v;
 			default :
-				trace( "unknown header key ("+id+")" );
+				println( "unknown header key ("+id+")" );
 			}
 		}
 		//var s : Site = header;
@@ -270,7 +261,6 @@ class CyberChrist {
 				datestring : formatTimePart( d_year )+"-"+formatTimePart( d_month )+"-"+formatTimePart( d_day ),
 				utc : utc,
 			}
-
 
 			var post : Post = {
 				id : e_post_filename.matched(4),
@@ -359,17 +349,18 @@ class CyberChrist {
 
 		//TODO: default context
 		var ctx = {
-			title : cfg.title, //"blog.disktree.net",
-			url : "http://blog.disktree.net",
+			title : cfg.title,
+			url : cfg.url,
 			posts : _posts,
 			archive : _archive,
-			//description: "Panzerkunst motherfucker", //TODO
-			//keywords : ["disktree","panzerkunst","art"]
+			description: cfg.description,
 			now : now,
 			cyberchrist_version : VERSION
+			//keywords : ["disktree","panzerkunst","art"]
 			//mobile:
 			//useragent
 		};
+
 		if( attach != null )
 			mixContext( ctx, attach );
 		return ctx;
