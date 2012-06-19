@@ -16,6 +16,7 @@ private typedef Config = {
 	description : String,
 	//keywords : Array<String>
 	num_posts : Int, // num posts shown on index site
+	author : String,
 	img : String
 }
 
@@ -272,8 +273,8 @@ class CyberChrist {
 				//tags : new Array<String>(),
 				//description : (site.description==null) ? ((defaultSiteDescription==null)?null:defaultSiteDescription) : site.description,
 				description : site.description,
-				author : site.author,
-				//author : (site.author==null) ? defaultAuthor : site.author,
+				//author : site.author,
+				author : (site.author==null) ? cfg.author : site.author,
 				
 				tags : site.tags, //["disktree","panzerkunst","art"],
 				keywords : ( site.tags != null ) ? site.tags.join(",") : null,
@@ -457,6 +458,7 @@ class CyberChrist {
 					case "description", "desc" : cfg.description = val;
 					case "img", "images" : cfg.img = val;
 					case "nposts", "numposts" : cfg.num_posts = Std.parseInt( val );
+					case "author" : cfg.author = val;
 					//TODO: other config parameters
 					//case "posts-shown" : cfg.post = val;
 					//case "keywords" : cfg.url = val.split(''); //TODO regexp split
