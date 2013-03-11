@@ -1,22 +1,21 @@
 
-### CYBERCHRIST BLOG ENGINE ###
+#
+# Cyberchrist
+#
 
 PROJECT = cyberchrist
-HX = haxe -main CyberChrist -cp src -cp ../panda \
-	-cp /home/t0ng/data/projects/hxmpp
+HX = haxe -main CyberChrist -cp src -cp ../panda -cp ~/disktree/workspace/hxmpp
 SRC = src/*.hx src/cyberchrist/*.hx
 OUT = ./
 
 all: build
 
 neko: $(SRC)
-	$(HX) -neko $(OUT)/$(PROJECT).n \
-		#--no-traces
+	$(HX) -neko $(OUT)/$(PROJECT).n --no-traces -dce full
 
-cpp: $(SRC)
-	$(HX) -cpp out --remap neko:cpp \
-		#--no-traces
-	mv out/CyberChrist ./$(PROJECT)
+#cpp: $(SRC)
+#	$(HX) -cpp out --remap neko:cpp --no-traces
+#	mv out/CyberChrist ./$(PROJECT)
 
 build: neko
 

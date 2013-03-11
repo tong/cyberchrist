@@ -1,12 +1,11 @@
 
-import haxe.Timer;
-import neko.Lib;
-import neko.Sys;
-import neko.FileSystem;
-import neko.io.File;
+import sys.FileSystem;
+import sys.io.File;
 import haxe.Template;
+import haxe.Timer;
 
 using StringTools;
+
 
 private typedef Config = {
 	url : String,
@@ -58,23 +57,23 @@ private typedef Post = { > Site,
 */
 class CyberChrist {
 	
-	public static inline var VERSION = "0.2.4";
+	public static inline var VERSION = "0.3";
 	
 	static var e_site = ~/ *---(.+) *--- *(.+)/ms;
 	static var e_header_line = ~/^ *([a-zA-Z0-9_\/\.\-]+) *: *([a-zA-Z0-9!_,\/\.\-\?\(\)\s]+) *$/;
 	static var e_post_filename = ~/^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])-([a-zA-Z0-9_,!\.\-\?\(\)\+]+)$/;
-	
+
 	static var cfg : Config;
 	static var tpl_site : Template;
 	static var posts : Array<Post>;
 	static var panda : Panda;
 	
-	// --------------- SYSTEM ---------------
-	
-	static inline function prnt( t : String ) Lib.print(t)
-	static inline function print( t : String ) Lib.print(t)
-	static inline function println( t : String ) Lib.println(t)
-	static inline function warn( t : String ) println( "Warning! "+t )
+	static inline function prnt( t : String ) Sys.print(t);
+	static inline function print( t : String ) Sys.print(t);
+	static inline function println( t : String ) Sys.println(t);
+	static inline function warn( t : String ) println( "Warning! "+t );
+
+	// --- File system utils
 	
 	static function writeFile( path : String, t : String ) {
 		var f = File.write( path, false );
@@ -110,7 +109,7 @@ class CyberChrist {
 	}
 	
 
-	// --------------- SOURCE PROCESSING ---------------
+	// --- Source processing
 
 	/**
 		Run cyberchrist on given source directory
@@ -414,18 +413,20 @@ class CyberChrist {
 		return ( t.charAt( t.length ) != "/" ) ? t+"/" : t;
 	}
 	
+
 	static function main() {
 		
 		println( "CyberChrist "+VERSION );
 		
+		var ts_start = Timer.stamp();
+
 		//TODO read cl params
 		//var args = Sys.args();
 		//println( "######################### "+args );
-		//....
-		
-		var ts_start = Timer.stamp();
+
 
 		// --- default config
+
 		cfg = cast {
 			url : "http://blog.disktree.net",
 			src : "src/",
@@ -434,10 +435,11 @@ class CyberChrist {
 			img : "/img/"
 		};
 
-		// --- read config file
-		var ereg = ~/^([a-zA-Z0-9-]+) *([a-zA-Z0-9 .-_]+)$/;
+
+		// --- read/set config from file
 		var path_cfg = 'src/_config'; //TODO
 		if( FileSystem.exists( path_cfg ) ) {
+			var ereg = ~/^([a-zA-Z0-9-]+) *([a-zA-Z0-9 .-_]+)$/;
 			for( l in File.getContent( path_cfg ).split( '\n' ) ) {
 				l = l.trim();
 				var i = l.indexOf( "#" );
@@ -472,6 +474,7 @@ class CyberChrist {
 			println( 'No config file found, using default parameters' );
 		}
 
+
 		// --- test required files
 		var requiredFiles = [
 			cfg.src, cfg.dst,
@@ -488,7 +491,8 @@ class CyberChrist {
 			Sys.exit(0);
 		}
 		
-		///////////// --- build
+
+		// --- build
 
 		posts = new Array();
 		
