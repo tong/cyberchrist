@@ -145,7 +145,7 @@ class CyberChrist {
 				if( f.startsWith( "_" ) ) {
 					// --- ignore files starting with an underscore
 				} else if( f == "htaccess" ) {
-					// TODO: process htaccess file(s)
+					File.copy( fp, cfg.dst+'.htaccess' );
 				} else {
 					var i = f.lastIndexOf(".");
 					if( i == -1 ) {
