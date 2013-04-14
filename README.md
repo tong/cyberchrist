@@ -1,4 +1,3 @@
-
 Cj8e2C|-|2!5†
 =============
 Occult, blog generator tool for the satanists at http://blog.disktree.net
@@ -8,4 +7,6 @@ Occult, blog generator tool for the satanists at http://blog.disktree.net
 * SeeAlso: https://github.com/tong/panda
 
 ### USAGE
+```sh
 $ cyberchrist help
+```
