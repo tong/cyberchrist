@@ -1,30 +1,30 @@
 
 #
-# Cyberchrist
+# cyberchrist
 #
 
-PROJECT = cyberchrist
-HX = haxe -main CyberChrist -cp src -cp ../panda -cp ~/disktree/workspace/hxmpp
-SRC = src/*.hx src/cyberchrist/*.hx
-OUT = ./
+INSTALL_PATH =
+CP = -cp src -cp ../om
+FLAGS = -dce full --no-traces
+
+ifeq ($(wildcard $INSTALL_PATH),)
+INSTALL_PATH = /usr/bin/cyberchrist
+endif
 
 all: build
 
-neko: $(SRC)
-	$(HX) -neko $(OUT)/$(PROJECT).n --no-traces -dce full
+build: src/*
+	haxe -neko cyberchrist.n $(CP) $(FLAGS) -main CyberChrist
 
-#cpp: $(SRC)
-#	$(HX) -cpp out --remap neko:cpp --no-traces
-#	mv out/CyberChrist ./$(PROJECT)
+install: build
+	nekotools boot cyberchrist.n
+	cp cyberchrist $(INSTALL_PATH)
+	#haxelib run xcross cyberchrist.n
 
-build: neko
-
-#test: build
-#	(cd test;neko ./../cyberchrist.n )
+uninstall:
+	rm -f $(INSTALL_PATH)
 
 clean:
-	rm -f $(OUT)/$(PROJECT).n
-	rm -f $(OUT)/$(PROJECT)
-	rm -rf out
+	rm -f cyberchrist cyberchrist.n
 
-PHONY: all build clean
+PHONY: all build install uninstall clean
