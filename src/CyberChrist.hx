@@ -3,9 +3,11 @@ import sys.FileSystem;
 import sys.io.File;
 import haxe.Template;
 import haxe.Timer;
-
+import om.Console;
+#if macro
+import haxe.macro.Context;
+#end
 using StringTools;
-
 
 private typedef Config = {
 	url : String,
@@ -28,13 +30,12 @@ private typedef DateTime = {
 	//var pub : String;
 }
 
+//private typedef Page = {
 private typedef Site = {
-
 	var title : String;
 	var date : DateTime;
 	var content : String;
 	var html : String;
-
 	var layout : String;
 	var css : Array<String>;
 	var tags : Array<String>;
@@ -49,72 +50,41 @@ private typedef Post = { > Site,
 }
 
 /**
-	Cyberchrist template fucker for blogs and shit.
-	Holy moly!!
-	
-	TODO: custom favicon
-	
+	Blog generator tool
 */
 class CyberChrist {
+
+	macro static function createHelp() {
+		var commands = [
+			'build : Build blog',
+			'config : Print blog config',
+//			'edit : Open editor',
+			'help : Print this help',
+			'version : Print version'
+		].map( function(v){ return '    '+v; } ).join('\n');
+  		return Context.makeExpr( 'cyberchrist $VERSION
+  Usage : cyberchrist <command>
+${commands}', Context.currentPos() );
+    }
 	
-	public static inline var VERSION = "0.3";
+	public static inline var VERSION = "0.3.1";
+	public static var HELP(default,null) = createHelp();
 	
+	public static var cfg : Config;
+	public static var siteTemplate : Template;
+	public static var verbose = false;
+
+	static var posts : Array<Post>;
+	static var wiki : Wiki;
+
 	static var e_site = ~/ *---(.+) *--- *(.+)/ms;
 	static var e_header_line = ~/^ *([a-zA-Z0-9_\/\.\-]+) *: *([a-zA-Z0-9!_,\/\.\-\?\(\)\s]+) *$/;
 	static var e_post_filename = ~/^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])-([a-zA-Z0-9_,!\.\-\?\(\)\+]+)$/;
 
-	static var cfg : Config;
-	static var tpl_site : Template;
-	static var posts : Array<Post>;
-	static var panda : Panda;
-	
-	static inline function prnt( t : String ) Sys.print(t);
-	static inline function print( t : String ) Sys.print(t);
-	static inline function println( t : String ) Sys.println(t);
-	static inline function warn( t : String ) println( "Warning! "+t );
-
-	// --- File system utils
-	
-	static function writeFile( path : String, t : String ) {
-		var f = File.write( path, false );
-		f.writeString( t );
-		f.close();
-	}
-	
-	static function clearDirectory( path : String ) {
-		for( f in FileSystem.readDirectory( path ) ) {
-			var p = path+"/"+f;
-			if( FileSystem.isDirectory( p ) ) {
-				clearDirectory( p );
-				FileSystem.deleteDirectory( p );
-			} else {
-				FileSystem.deleteFile( p );
-			}
-		}
-	}
-	
-	static function copyDataDirectory( path : String ) {
-		var ps = cfg.src + path;
-		for( f in FileSystem.readDirectory( ps ) ) {
-			var s = ps + "/" + f;
-			var d = cfg.dst + path + "/" + f;
-			if( FileSystem.isDirectory( s ) ) {
-				if( !FileSystem.exists(d) )
-					FileSystem.createDirectory( d );
-				copyDataDirectory( path+"/"+f );
-			} else {
-				File.copy( s, d );
-			}
-		}
-	}
-	
-
-	// --- Source processing
-
 	/**
 		Run cyberchrist on given source directory
 	*/
-	static function processDirectory( path : String ) {
+	public static function processDirectory( path : String ) {
 		for( f in FileSystem.readDirectory( path ) ) {
 			if( f.startsWith(".") )
 				continue;
@@ -139,7 +109,7 @@ class CyberChrist {
 					var d = cfg.dst+f;
 					if( !FileSystem.exists(d) )
 						FileSystem.createDirectory( d );
-					copyDataDirectory( f );
+					copyDirectory( f );
 				}
 			} else {
 				if( f.startsWith( "_" ) ) {
@@ -187,7 +157,7 @@ class CyberChrist {
 	}
 	
 	/**
-		Parse file at given path into a cyberchrist.Site object
+		Parse file at given path into a Site object
 	*/
 	static function parseSite( path : String, name : String ) : Site {
 		var fp = path+"/"+name;
@@ -241,14 +211,14 @@ class CyberChrist {
 			if( f.startsWith(".") )
 				continue;
 			if( !e_post_filename.match( f ) )
-				error( "invalid post filename ["+f+"]" );
+				error( 'invalid filename for post [$f]' );
 			
 			// create site object
 			var site : Site = parseSite( path, f );
 			if( site.layout == null )
 				site.layout = "post";
 			
-			site.html = panda.format( site.content );
+			site.html = wiki.format( site.content );
 			
 			var d_year = Std.parseInt( e_post_filename.matched(1) );
 			var d_month = Std.parseInt( e_post_filename.matched(2) );
@@ -292,12 +262,12 @@ class CyberChrist {
 			post.path =
 				formatTimePart( d_year )+"/"+
 				formatTimePart( d_month )+"/"+
-				formatTimePart( d_day )+"/"+post.id+".html";
+				formatTimePart( d_day )+'/${post.id}.html';
 			posts.push( post );
 		}
 		
 		// sort posts
-		posts.sort( function(a:Post,b:Post){
+		posts.sort( function(a,b){
 			if( a.date.year > b.date.year ) return -1;
 			else if( a.date.year < b.date.year ) return 1;
 			else {
@@ -311,16 +281,15 @@ class CyberChrist {
 			return 0;
 		});
 		
-		// write posts html
+		// --- write post html files
 		var tpl = parseSite( cfg.src+"_layout", "post.html" );
-		prnt("Posts");
+		print( '${posts.length} posts : ' );
 		for( p in posts ) {
 			var ctx = mixContext( {}, p );
 			ctx.content = new Template( tpl.content ).execute( p );
 			writeHTMLSite( cfg.dst + p.path, ctx );
-			prnt(".");
+			Console.print( "+" );
 		}
-		prnt("("+posts.length+")");
 	}
 	
 	/**
@@ -373,11 +342,10 @@ class CyberChrist {
 	}
 	
 	static inline function writeHTMLSite( path : String, ctx : Dynamic ) {
-		var t = tpl_site.execute( ctx );
+		var t = siteTemplate.execute( ctx );
 		var a = new Array<String>();
-		for( l in t.split("\n") ) {
+		for( l in t.split( "\n" ) )
 			if( l.trim() != "" ) a.push(l);
-		}
 		t = a.join("\n");
 		writeFile( path, t );
 	}
@@ -403,31 +371,76 @@ class CyberChrist {
 		}
 		return Std.string(i);
 	}
+
+	static function writeFile( path : String, content : String ) {
+		var f = File.write( path, false );
+		f.writeString( content );
+		f.close();
+	}
 	
-	static function error( ?info : String ) {
-		if( info != null ) println( "ERROR: "+info );
-		Sys.exit(0);
+	static function clearDirectory( path : String ) {
+		for( f in FileSystem.readDirectory( path ) ) {
+			var p = path+"/"+f;
+			if( FileSystem.isDirectory( p ) ) {
+				clearDirectory( p );
+				FileSystem.deleteDirectory( p );
+			} else {
+				FileSystem.deleteFile( p );
+			}
+		}
+	}
+	
+	static function copyDirectory( path : String ) {
+		var ps = cfg.src + path;
+		for( f in FileSystem.readDirectory( ps ) ) {
+			var s = ps + "/" + f;
+			var d = cfg.dst + path + "/" + f;
+			if( FileSystem.isDirectory( s ) ) {
+				if( !FileSystem.exists(d) )
+					FileSystem.createDirectory( d );
+				copyDirectory( path+"/"+f );
+			} else {
+				File.copy( s, d );
+			}
+		}
+	}
+
+	static inline function print( t : Dynamic ) Sys.print(t);
+	static inline function println( t : Dynamic ) Sys.println(t);
+	static inline function warn( t : Dynamic ) {
+		Console.w( '  warning : '+t );
+	}
+
+	static function error( ?m : Dynamic ) {
+		if( m != null )
+			Console.e( m );
+		Sys.exit( 1 );
+	}
+	
+	static function exit( ?v : Dynamic ) {
+		if( v != null )
+			println( v );
+		Sys.exit( 0 );
 	}
 
 	static function appendSlash( t : String ) : String {
 		return ( t.charAt( t.length ) != "/" ) ? t+"/" : t;
 	}
-	
 
 	static function main() {
 		
-		println( "CyberChrist "+VERSION );
-		
-		var ts_start = Timer.stamp();
+		var ts = Timer.stamp();
 
-		//TODO read cl params
-		//var args = Sys.args();
-		//println( "######################### "+args );
-
-
-		// --- default config
-
-		cfg = cast {
+		var args = Sys.args();
+		var cmd = args[0];
+		switch( cmd ) {
+		case "help":
+			exit( HELP );
+		case "version":
+			exit( VERSION );
+		}
+	
+		cfg = cast { // default config
 			url : "http://blog.disktree.net",
 			src : "src/",
 			dst : "www/",
@@ -435,8 +448,7 @@ class CyberChrist {
 			img : "/img/"
 		};
 
-
-		// --- read/set config from file
+		// --- read config
 		var path_cfg = 'src/_config'; //TODO
 		if( FileSystem.exists( path_cfg ) ) {
 			var ereg = ~/^([a-zA-Z0-9-]+) *([a-zA-Z0-9 .-_]+)$/;
@@ -466,55 +478,50 @@ class CyberChrist {
 					//case "keywords" : cfg.url = val.split(''); //TODO regexp split
 					//case "gist"
 					default :
-						println( "Unknown configuration parameter ["+cmd+"]" );
+						warn( 'unknown configuration parameter [$cmd]' );
 					}
 				}
 			}
 		} else {
-			println( 'No config file found, using default parameters' );
+			warn( 'no config file found' );
 		}
 
-
-		// --- test required files
+		// --- check requirements
 		var requiredFiles = [
-			cfg.src, cfg.dst,
-			cfg.src+'_layout', cfg.src+'_layout/site.html'
+			cfg.src,
+			cfg.dst,
+			cfg.src+'_layout',
+			cfg.src+'_layout/site.html'
 		];
 		var errors = new Array<String>();
 		for( f in requiredFiles ) {
 			if( !FileSystem.exists( f ) )
-				errors.push( 'file missing:'+cfg.src+''+f+')' );
+				errors.push( 'missing file ${cfg.src}$f' );
 		}
 		if( errors.length > 0 ) {
-			println( "Holy shit! ERROR" );
-			for( e in errors ) println( "\t"+e );
-			Sys.exit(0);
+			var m = new Array<String>();
+			for( e in errors )
+				m.push( '  $e' );
+			error( m.join('\n') );
 		}
-		
 
-		// --- build
-
-		posts = new Array();
-		
-		// ---- prepeare panda content formatter
-		panda = new Panda( {
-			path_img : cfg.img,
-			createLink : function(s){return s;}
-		} );
-
-		// ---- prepare templates
-		tpl_site = new Template( File.getContent( cfg.src+'_layout/site.html' ) );
-		
-		// --- clear target directory
-		clearDirectory( cfg.dst );
-		
-		// ---- write posts
-		printPosts( cfg.src+"_posts" );
-
-		// ---- write everything else
-		processDirectory( cfg.src );
-		
-		println( "\nOK, "+Std.int((Timer.stamp()-ts_start)*1000)+"ms" );
+		switch( cmd ) {
+		case 'config':
+			for( f in Reflect.fields( cfg ) )
+				Console.i( '  '+f+' : '+Reflect.field( cfg, f ) );
+			exit();
+		case 'build',_:
+			Console.i( 'cyberchrist > '+cfg.url );
+			posts = new Array();
+			wiki = new Wiki( {
+				imagePath : cfg.img,
+				createLink : function(s){return s;}
+			} );
+			siteTemplate = new Template( File.getContent( cfg.src+'_layout/site.html' ) );
+			clearDirectory( cfg.dst ); // clear target directory
+			printPosts( cfg.src+"_posts" ); // write posts
+			processDirectory( cfg.src ); // write everything else
+			Console.i( "\nok : "+Std.int((Timer.stamp()-ts)*1000)+"ms" );
+		}
 	}
-
 }
