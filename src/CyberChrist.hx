@@ -56,9 +56,11 @@ class CyberChrist {
 
 	macro static function createHelp() {
 		var commands = [
-			'build : Build blog',
-			'config : Print blog config',
+			'build : Build project',
+			'release : Build project in release mode',
+			'clean : Remove all generated files',
 //			'edit : Open editor',
+			'config : Print project config',
 			'help : Print this help',
 			'version : Print version'
 		].map( function(v){ return '    '+v; } ).join('\n');
@@ -69,11 +71,13 @@ ${commands}', Context.currentPos() );
 	
 	public static inline var VERSION = "0.3.1";
 	public static var HELP(default,null) = createHelp();
+	public static inline var BUILD_INFO_FILE = '.cyberchrist';
 	
 	public static var cfg : Config;
 	public static var siteTemplate : Template;
 	public static var verbose = false;
 
+	static var lastBuildDate : Float = -1;
 	static var posts : Array<Post>;
 	static var wiki : Wiki;
 
@@ -84,7 +88,7 @@ ${commands}', Context.currentPos() );
 	/**
 		Run cyberchrist on given source directory
 	*/
-	public static function processDirectory( path : String ) {
+	static function processDirectory( path : String ) {
 		for( f in FileSystem.readDirectory( path ) ) {
 			if( f.startsWith(".") )
 				continue;
@@ -283,7 +287,7 @@ ${commands}', Context.currentPos() );
 		
 		// --- write post html files
 		var tpl = parseSite( cfg.src+"_layout", "post.html" );
-		print( '${posts.length} posts : ' );
+		print( 'generating ${posts.length} posts : ' );
 		for( p in posts ) {
 			var ctx = mixContext( {}, p );
 			ctx.content = new Template( tpl.content ).execute( p );
@@ -433,6 +437,8 @@ ${commands}', Context.currentPos() );
 
 		var args = Sys.args();
 		var cmd = args[0];
+		if( cmd == null )
+			cmd = 'build';
 		switch( cmd ) {
 		case "help":
 			exit( HELP );
@@ -486,10 +492,10 @@ ${commands}', Context.currentPos() );
 			warn( 'no config file found' );
 		}
 
-		// --- check requirements
+		// --- check build requirements
 		var requiredFiles = [
 			cfg.src,
-			cfg.dst,
+			//cfg.dst,
 			cfg.src+'_layout',
 			cfg.src+'_layout/site.html'
 		];
@@ -505,12 +511,21 @@ ${commands}', Context.currentPos() );
 			error( m.join('\n') );
 		}
 
+		if( FileSystem.exists( BUILD_INFO_FILE ) ) {
+			lastBuildDate = Date.fromString( File.getContent( BUILD_INFO_FILE ) ).getTime();
+		}
+
 		switch( cmd ) {
-		case 'config':
-			for( f in Reflect.fields( cfg ) )
-				Console.i( '  '+f+' : '+Reflect.field( cfg, f ) );
-			exit();
-		case 'build',_:
+		
+		case 'clean' :
+			if( FileSystem.exists( cfg.dst ) ) {
+				clearDirectory( cfg.dst );
+				FileSystem.deleteDirectory( cfg.dst );
+				println( 'project cleaned' );
+			}
+
+		case 'build':
+
 			Console.i( 'cyberchrist > '+cfg.url );
 			posts = new Array();
 			wiki = new Wiki( {
@@ -518,10 +533,44 @@ ${commands}', Context.currentPos() );
 				createLink : function(s){return s;}
 			} );
 			siteTemplate = new Template( File.getContent( cfg.src+'_layout/site.html' ) );
-			clearDirectory( cfg.dst ); // clear target directory
+
+			if( FileSystem.exists( BUILD_INFO_FILE ) ) {
+				lastBuildDate = Date.fromString( File.getContent( BUILD_INFO_FILE ) ).getTime();
+			}
+			
+			//TODO
+			/*
+			if( lastBuildDate > 0 ) {
+				Console.d("ALREADY EXISTS");
+			} else {
+
+			}
+			*/
+
+			if( FileSystem.exists( cfg.dst ) ) {
+				clearDirectory( cfg.dst ); // clear target directory
+			} else {
+				FileSystem.createDirectory( cfg.dst );	
+			}
+
 			printPosts( cfg.src+"_posts" ); // write posts
 			processDirectory( cfg.src ); // write everything else
+
+			var fo = File.write( BUILD_INFO_FILE );
+			fo.writeString( Date.now().toString() );
+			fo.close();
+
 			Console.i( "\nok : "+Std.int((Timer.stamp()-ts)*1000)+"ms" );
+
+		case 'config':
+			Console.i( 'path : '+Sys.getCwd() );
+			if( lastBuildDate != -1 )
+				Console.i( 'last build : '+Date.fromTime( lastBuildDate ) );
+			else
+				Console.i( 'project never built so far' );
+			for( f in Reflect.fields( cfg ) )
+				Console.i( '  $f : '+Reflect.field( cfg, f ) );
+			exit();
 		}
 	}
 }

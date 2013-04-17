@@ -17,12 +17,13 @@ build: src/*
 	haxe -neko cyberchrist.n $(CP) $(FLAGS) -main CyberChrist
 
 install: build
+	#TODO
 	nekotools boot cyberchrist.n
-	cp cyberchrist $(INSTALL_PATH)
-	#haxelib run xcross cyberchrist.n
+	#cp cyberchrist $(INSTALL_PATH)
 
 uninstall:
-	rm -f $(INSTALL_PATH)
+	#TODO
+	#rm -f $(INSTALL_PATH)
 
 clean:
 	rm -f cyberchrist cyberchrist.n
