@@ -2,30 +2,38 @@
 #
 # cyberchrist
 #
+# For debug build set: debug=true
+#
 
-INSTALL_PATH =
+#UNAME = $(shell sh -c 'uname -m')
+#ifeq (${UNAME},x86_64)
+
+INSTALL_PATH = usr/bin
 CP = -cp src -cp ../om
-FLAGS = -dce full --no-traces
+FLAGS =
 
-ifeq ($(wildcard $INSTALL_PATH),)
-INSTALL_PATH = /usr/bin/cyberchrist
+ifeq (${debug},true)
+FLAGS = -debug
+else
+FLAGS = -dce full --no-traces
 endif
 
-all: build
+HX = haxe $(CP) $(FLAGS) -main CyberChrist
 
-build: src/*
-	haxe -neko cyberchrist.n $(CP) $(FLAGS) -main CyberChrist
+all: bin
 
-install: build
-	#TODO
+bin: src/*
+	$(HX) -neko cyberchrist.n
 	nekotools boot cyberchrist.n
-	#cp cyberchrist $(INSTALL_PATH)
+
+install: bin
+	#cp cyberchrist $(INSTALL_PATH)/cyberchrist
+	cp ./cyberchrist $(INSTALL_PATH)
 
 uninstall:
-	#TODO
-	#rm -f $(INSTALL_PATH)
+	rm -f $(INSTALL_PATH)/cyberchrist
 
 clean:
 	rm -f cyberchrist cyberchrist.n
 
-PHONY: all build install uninstall clean
+PHONY: all bin install uninstall clean
