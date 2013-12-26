@@ -1,11 +1,10 @@
+package cyberchrist;
 
 #if sys
 import sys.io.File;
 #end
 
 using StringTools;
-
-//TODO move to om.format.Wiki
 
 typedef WikiConfig = {
 
@@ -14,10 +13,9 @@ typedef WikiConfig = {
 
 	/** Callback for creating links */
 	var createLink : String->String;
-
 }
 
-class Wiki {
+class Markup {
 	
 	//static var div_open = ~/^\[([A-Za-z0-9_ ]+)\]$/;
 	//static var div_close = ~/^\[\/([A-Za-z0-9_ ]+)\]$/;
@@ -49,27 +47,23 @@ class Wiki {
 	static var E_strikeout = ~/~~([^<>]*?)~~/g;
 	
 	public var config : WikiConfig;
-	//public var ext : Array<Formatter>;
 
 	public function new( config : WikiConfig ) {
 		this.config = config;
-		//ext = new Array();
 	}
 	
 	public function format( t : String ) : String {
 		
-		// --- remove multiline comments
 		t = removeComments( t );
-
 		t = ~/\r\n?/g.replace( t, "\n" );
 
-		var me = this;
+		//var me = this;
 		var b = new StringBuf();
 		
 		var codes = new Array();
 		t = ~/<code( [a-zA-Z0-9]+)?>([^\0]*?)<\/code>/.map(t,function(r) {
 			var style = r.matched(1);
-			var code = me.code(r.matched(2),isEmpty(style)?null:style.substr(1));
+			var code = code(r.matched(2),isEmpty(style)?null:style.substr(1));
 			codes.push(code);
 			return "##CODE"+(codes.length-1)+"##";
 		});

@@ -1,24 +1,33 @@
 
+import Sys.print;
+import Sys.println;
 import sys.FileSystem;
 import sys.io.File;
 import haxe.Template;
 import haxe.Timer;
+import haxe.io.Path;
 import om.Console;
+import cyberchrist.Markup;
+
 #if macro
 import haxe.macro.Context;
 #end
+
 using StringTools;
 
+//private typedef SyntaxFormatter = Format; // Markhaxe
+//private typedef SyntaxFormatter = cyberchrist.Format; // Markhaxe
+
 private typedef Config = {
-	url : String,
-	src : String,
-	dst : String,
-	title : String,
-	description : String,
-	//keywords : Array<String>
-	num_posts : Int, // num posts shown on index site
-	author : String,
-	img : String
+	var url : String;
+	var src : String;
+	var dst : String;
+	@:optional var title : String;
+	@:optional var description : String;
+	//@:optional var keywords : Array<String>
+	@:optional var num_index_posts : Int; // num posts shown on index site
+	@:optional var author : String;
+	@:optional var img : String;
 }
 
 private typedef DateTime = {
@@ -30,7 +39,6 @@ private typedef DateTime = {
 	//var pub : String;
 }
 
-//private typedef Page = {
 private typedef Site = {
 	var title : String;
 	var date : DateTime;
@@ -49,37 +57,28 @@ private typedef Post = { > Site,
 	var keywords : String;
 }
 
-/**
-	Blog generator tool
+/*
+	Cj8e2C|-|2!5† - Blog generator
 */
 class CyberChrist {
-
-	macro static function createHelp() {
-		var commands = [
-			'build : Build project',
-			'release : Build project in release mode',
-			'clean : Remove all generated files',
-//			'edit : Open editor',
-			'config : Print project config',
-			'help : Print this help',
-			'version : Print version'
-		].map( function(v){ return '    '+v; } ).join('\n');
-  		return Context.makeExpr( 'cyberchrist $VERSION
-  Usage : cyberchrist <command>
-${commands}', Context.currentPos() );
-    }
 	
-	public static inline var VERSION = "0.3.1";
-	public static var HELP(default,null) = createHelp();
+	public static inline var VERSION = "0.3.2";
+	public static var HELP(default,null) = buildHelp();
 	public static inline var BUILD_INFO_FILE = '.cyberchrist';
 	
-	public static var cfg : Config;
+	public static var cfg : Config = {
+		url : "http://blog.disktree.net",
+		src : "src/",
+		dst : "out/",
+		num_index_posts : 10,
+		img : "/img/"
+	};
 	public static var siteTemplate : Template;
 	public static var verbose = false;
 
 	static var lastBuildDate : Float = -1;
 	static var posts : Array<Post>;
-	static var wiki : Wiki;
+	static var markup : Markup;
 
 	static var e_site = ~/ *---(.+) *--- *(.+)/ms;
 	static var e_header_line = ~/^ *([a-zA-Z0-9_\/\.\-]+) *: *([a-zA-Z0-9!_,\/\.\-\?\(\)\s]+) *$/;
@@ -111,9 +110,10 @@ ${commands}', Context.currentPos() );
 					*/
 				} else {
 					var d = cfg.dst+f;
-					if( !FileSystem.exists(d) )
-						FileSystem.createDirectory( d );
+					if( !FileSystem.exists(d) ) FileSystem.createDirectory( d );
+					//TODO not just copy file but process
 					copyDirectory( f );
+					//processDirectory(f);
 				}
 			} else {
 				if( f.startsWith( "_" ) ) {
@@ -121,53 +121,97 @@ ${commands}', Context.currentPos() );
 				} else if( f == "htaccess" ) {
 					File.copy( fp, cfg.dst+'.htaccess' );
 				} else {
-					var i = f.lastIndexOf(".");
-					if( i == -1 ) {
+					var ext = Path.extension( f );
+					//println(ext);
+					if( ext == null )
 						continue;
-					} else {
-						var ext = f.substr( i+1 );
-						var ctx : Dynamic = createBaseContext();
-						switch( ext ) {
-						case "xml","rss" :
-							var tpl = new Template( File.getContent(fp) );
-							var _posts : Array<Post> = ctx.posts;
-							for( p in _posts ) {
-								//p.content = StringTools.htmlEscape( p.content );
-							}
-							writeFile( cfg.dst+f, tpl.execute( ctx ) );
-						case "html" :
-							var site = parseSite( path, f );
-							var tpl = new Template( site.content );
-							var content = tpl.execute( ctx );
-							ctx = createBaseContext();
-							ctx.content = content;
-							ctx.html = content;
-							//trace(site.title);
-							if( site.title != null ) ctx.title = site.title;
-							if( site.description != null ) ctx.description = site.description;
-							if( site.tags != null ) ctx.keywords = site.tags.join(",");
-							writeHTMLSite( cfg.dst+f, ctx );
-						//case "css" :
-						//TODO do css compressions here
-						//	File.copy( fp, path_dst+f );
-						default:
-							//TODO: check plugins .....
-							File.copy( fp, cfg.dst+f );
-						}
+					var ctx : Dynamic = createBaseContext();
+					switch ext {
+					case "xml","rss" :
+						var tpl = new Template( File.getContent(fp) );
+						var _posts : Array<Post> = ctx.posts;
+						//for( p in _posts ) p.content = StringTools.htmlEscape( p.content );
+						writeFile( cfg.dst+f, tpl.execute( ctx ) );
+					case "html" :
+						var site = parseSite( path, f );
+						var tpl = new Template( site.content );
+						var content = tpl.execute( ctx );
+						ctx = createBaseContext();
+						ctx.content = content;
+						ctx.html = content;
+						//trace(site.title);
+						if( site.title != null ) ctx.title = site.title;
+						if( site.description != null ) ctx.description = site.description;
+						if( site.tags != null ) ctx.keywords = site.tags.join(",");
+						writeHTMLSite( cfg.dst+f, ctx );
+					case "less":
+						println("LESSSSSS::::::::: "+fp+" :::: "+(cfg.dst+f) );
+					default:
+						File.copy( fp, cfg.dst+f );
 					}
 				}
 			}
 		}
 	}
+
+	/* //TODO use this method to process EVERY file
+	static function processFile( p : String, f : String ) {
+		if( f.startsWith( "_" ) ) {
+			// --- ignore files starting with an underscore
+			return;
+		}
+		var i = f.lastIndexOf(".");
+		if( i == -1 ) {
+			warn( 'unhandled file ($f)' );
+		}
+		var ext = f.substr( i+1 );
+		var ctx : Dynamic = createBaseContext();
+		switch( ext ) {
+		case "xml","rss" :
+			var tpl = new Template( File.getContent( p ) );
+			var _posts : Array<Post> = ctx.posts;
+			/*
+			for( p in _posts ) {
+				//p.content = StringTools.htmlEscape( p.content );
+			}
+			* /
+			writeFile( cfg.dst+f, tpl.execute( ctx ) );
+		case "html" :
+			var site = parseSite( p, f );
+			var tpl = new Template( site.content );
+			var content = tpl.execute( ctx );
+			ctx = createBaseContext();
+			ctx.content = content;
+			ctx.html = content;
+			//trace(site.title);
+			if( site.title != null ) ctx.title = site.title;
+			if( site.description != null ) ctx.description = site.description;
+			if( site.tags != null ) ctx.keywords = site.tags.join(",");
+			writeHTMLSite( cfg.dst+f, ctx );
+		case "less":
+			//TODO less 2 css
+			//lessc( fp, cfg.dst+f );
+			trace("LESSSSSS::::::::: "+p+" :::: "+(cfg.dst+f) );
+			File.copy( p, cfg.dst+f );
+
+		//case "css" :
+		//TODO do css compressions here
+						//	File.copy( fp, path_dst+f );
+		default:
+			//TODO: check plugins .....
+			File.copy( p, cfg.dst+f );
+		}
+	}
+	*/
 	
 	/**
-		Parse file at given path into a Site object
+		Parse file at given path into a 'Site' object
 	*/
 	static function parseSite( path : String, name : String ) : Site {
-		var fp = path+"/"+name;
+		var fp = '$path/$name';
 		var ft = File.getContent( fp );
 		if( !e_site.match( ft ) )
-			error( "invalid html template ("+fp+")" );
+			error( 'Invalid html template [$fp]' );
 		var s : Site = cast {
 			css : new Array<String>()
 		};
@@ -179,27 +223,18 @@ ${commands}', Context.currentPos() );
 			var id = e_header_line.matched(1);
 			var v = e_header_line.matched(2);
 			switch( id ) {
-			case "title":
-				s.title = v;
-			case "layout":
-				s.layout = v;
-			case "css":
-				s.css.push(v);
+			case "title": s.title = v;
+			case "layout": s.layout = v;
+			case "css": s.css.push(v);
 			case "tags":
 				s.tags = new Array();
 				var tags = v.split( "," );
-				for( t in tags ) {
-					s.tags.push( t.trim() );
-				}
-			case "description":
-				s.description = v;
-			case "author":
-				s.author = v;
-			default :
-				println( "unknown header key ("+id+")" );
+				for( t in tags ) s.tags.push( t.trim() );
+			case "description": s.description = v;
+			case "author": s.author = v;
+			default : println( 'Unknown header key ($id)' );
 			}
 		}
-		//var s : Site = header;
 		s.content = e_site.matched(2);
 		return s;
 	}
@@ -209,21 +244,16 @@ ${commands}', Context.currentPos() );
 		@path The path to the post source
 	*/
 	static function printPosts( path : String ) {
-		
 		for( f in FileSystem.readDirectory( path ) ) {
-			
 			if( f.startsWith(".") )
 				continue;
 			if( !e_post_filename.match( f ) )
 				error( 'invalid filename for post [$f]' );
-			
-			// create site object
+			// Create site object
 			var site : Site = parseSite( path, f );
 			if( site.layout == null )
 				site.layout = "post";
-			
-			site.html = wiki.format( site.content );
-			
+			site.html = markup.format( site.content );
 			var d_year = Std.parseInt( e_post_filename.matched(1) );
 			var d_month = Std.parseInt( e_post_filename.matched(2) );
 			var d_day = Std.parseInt( e_post_filename.matched(3) );
@@ -235,7 +265,6 @@ ${commands}', Context.currentPos() );
 				datestring : formatTimePart( d_year )+"-"+formatTimePart( d_month )+"-"+formatTimePart( d_day ),
 				utc : utc,
 			}
-
 			var post : Post = {
 				id : e_post_filename.matched(4),
 				title : site.title,
@@ -248,21 +277,17 @@ ${commands}', Context.currentPos() );
 				description : site.description,
 				//author : site.author,
 				author : (site.author==null) ? cfg.author : site.author,
-				
 				tags : site.tags, //["disktree","panzerkunst","art"],
 				keywords : ( site.tags != null ) ? site.tags.join(",") : null,
-
 				css : new Array<String>(),
 				path : null
 			};
-
 			var path = cfg.dst + formatTimePart( d_year );
 			if( !FileSystem.exists( path ) ) FileSystem.createDirectory( path );
 			path = path+"/" + formatTimePart( d_month );
 			if( !FileSystem.exists( path ) ) FileSystem.createDirectory( path );
 			path = path+"/" + formatTimePart( d_day );
 			if( !FileSystem.exists( path ) ) FileSystem.createDirectory( path );
-
 			post.path =
 				formatTimePart( d_year )+"/"+
 				formatTimePart( d_month )+"/"+
@@ -270,7 +295,7 @@ ${commands}', Context.currentPos() );
 			posts.push( post );
 		}
 		
-		// sort posts
+		// Sort posts
 		posts.sort( function(a,b){
 			if( a.date.year > b.date.year ) return -1;
 			else if( a.date.year < b.date.year ) return 1;
@@ -285,11 +310,11 @@ ${commands}', Context.currentPos() );
 			return 0;
 		});
 		
-		// --- write post html files
+		// Write post html files
 		var tpl = parseSite( cfg.src+"_layout", "post.html" );
-		print( 'generating ${posts.length} posts : ' );
+		print( 'Generating ${posts.length} posts : ' );
 		for( p in posts ) {
-			var ctx = mixContext( {}, p );
+			var ctx = mergeObjects( {}, p );
 			ctx.content = new Template( tpl.content ).execute( p );
 			writeHTMLSite( cfg.dst + p.path, ctx );
 			Console.print( "+" );
@@ -297,17 +322,15 @@ ${commands}', Context.currentPos() );
 	}
 	
 	/**
-		Create the base context for printing templates from anything.
+		Create the base context for printing templates
 	*/
 	static function createBaseContext( ?attach : Dynamic ) : Dynamic {
-		
 		var _posts = posts;
 		var _archive = new Array<Post>();
-		if( posts.length > cfg.num_posts ) {
-			_archive = _posts.slice( cfg.num_posts );
-			_posts = _posts.slice( 0, cfg.num_posts );
+		if( posts.length > cfg.num_index_posts ) {
+			_archive = _posts.slice( cfg.num_index_posts );
+			_posts = _posts.slice( 0, cfg.num_index_posts );
 		}
-
 		var n = Date.now();
 		var dy = n.getFullYear();
 		var dm = n.getMonth()+1;
@@ -319,8 +342,6 @@ ${commands}', Context.currentPos() );
 			datestring : formatTimePart(dy)+"-"+formatTimePart(dm)+"-"+formatTimePart(dd),
 			utc : formatUTC( dy, dm, dd )
 		}
-
-		//TODO: default context
 		var ctx = {
 			title : cfg.title,
 			url : cfg.url,
@@ -333,24 +354,21 @@ ${commands}', Context.currentPos() );
 			//mobile:
 			//useragent
 		};
-
 		if( attach != null )
-			mixContext( ctx, attach );
+			mergeObjects( ctx, attach );
 		return ctx;
 	}
 	
-	static function mixContext<A,B,R>( a : A, b : B ) : R {
-		for( f in Reflect.fields( b ) )
-			Reflect.setField( a, f, Reflect.field( b, f ) );
+	static function mergeObjects<A,B,R>( a : A, b : B ) : R {
+		for( f in Reflect.fields( b ) ) Reflect.setField( a, f, Reflect.field( b, f ) );
 		return cast a;
 	}
 	
 	static inline function writeHTMLSite( path : String, ctx : Dynamic ) {
 		var t = siteTemplate.execute( ctx );
 		var a = new Array<String>();
-		for( l in t.split( "\n" ) )
-			if( l.trim() != "" ) a.push(l);
-		t = a.join("\n");
+		for( l in t.split( "\n" ) ) if( l.trim() != "" ) a.push(l);
+		t = a.join( "\n" );
 		writeFile( path, t );
 	}
 	
@@ -370,10 +388,7 @@ ${commands}', Context.currentPos() );
 	}
 
 	static function formatTimePart( i : Int ) : String {
-		if( i < 10 ) {
-			return "0"+i;
-		}
-		return Std.string(i);
+		return if( i < 10 ) "0"+i else Std.string(i);
 	}
 
 	static function writeFile( path : String, content : String ) {
@@ -397,64 +412,45 @@ ${commands}', Context.currentPos() );
 	static function copyDirectory( path : String ) {
 		var ps = cfg.src + path;
 		for( f in FileSystem.readDirectory( ps ) ) {
-			var s = ps + "/" + f;
-			var d = cfg.dst + path + "/" + f;
+			var s = '$ps/$f';
+			var d = cfg.dst + '$path/$f';
 			if( FileSystem.isDirectory( s ) ) {
-				if( !FileSystem.exists(d) )
-					FileSystem.createDirectory( d );
-				copyDirectory( path+"/"+f );
+				if( !FileSystem.exists(d) ) FileSystem.createDirectory( d );
+				copyDirectory( '$path/$f' );
 			} else {
 				File.copy( s, d );
 			}
 		}
 	}
 
-	static inline function print( t : Dynamic ) Sys.print(t);
-	static inline function println( t : Dynamic ) Sys.println(t);
-	static inline function warn( t : Dynamic ) {
-		Console.w( '  warning : '+t );
-	}
+	static function appendSlash( t : String ) : String return ( t.charAt( t.length ) != "/" ) ? t+"/" : t;
 
-	static function error( ?m : Dynamic ) {
-		if( m != null )
-			Console.e( m );
+	static inline function warn( t : Dynamic ) Console.w( '  warning : '+t );
+
+	static function error( info : Dynamic ) {
+		Console.e( info );
 		Sys.exit( 1 );
 	}
 	
-	static function exit( ?v : Dynamic ) {
-		if( v != null )
-			println( v );
+	static function exit( ?info : Dynamic ) {
+		if( info != null ) println( info );
 		Sys.exit( 0 );
 	}
 
-	static function appendSlash( t : String ) : String {
-		return ( t.charAt( t.length ) != "/" ) ? t+"/" : t;
-	}
 
 	static function main() {
-		
-		var ts = Timer.stamp();
+
+		var timestamp = Timer.stamp();
 
 		var args = Sys.args();
 		var cmd = args[0];
-		if( cmd == null )
-			cmd = 'build';
-		switch( cmd ) {
-		case "help":
-			exit( HELP );
-		case "version":
-			exit( VERSION );
+		if( cmd == null ) cmd = 'build';
+		switch cmd {
+		case "help": exit( HELP );
+		case "version": exit( VERSION );
 		}
-	
-		cfg = cast { // default config
-			url : "http://blog.disktree.net",
-			src : "src/",
-			dst : "www/",
-			num_posts : 10,
-			img : "/img/"
-		};
 
-		// --- read config
+		// Read/Parse config
 		var path_cfg = 'src/_config'; //TODO
 		if( FileSystem.exists( path_cfg ) ) {
 			var ereg = ~/^([a-zA-Z0-9-]+) *([a-zA-Z0-9 .-_]+)$/;
@@ -470,29 +466,26 @@ ${commands}', Context.currentPos() );
 				if( ereg.match( l ) ) {
 					var cmd = ereg.matched(1);
 					var val = ereg.matched(2).trim();
-					switch( cmd ) {
+					switch cmd {
 					case "url" : cfg.url = val;
 					case "src" : cfg.src = appendSlash( val );
 					case "dst" : cfg.dst = appendSlash( val );
 					case "title" : cfg.title = val;
 					case "description", "desc" : cfg.description = val;
 					case "img", "images" : cfg.img = val;
-					case "nposts", "numposts" : cfg.num_posts = Std.parseInt( val );
+					case "nposts", "numposts" : cfg.num_index_posts = Std.parseInt( val );
 					case "author" : cfg.author = val;
 					//TODO: other config parameters
 					//case "posts-shown" : cfg.post = val;
 					//case "keywords" : cfg.url = val.split(''); //TODO regexp split
 					//case "gist"
-					default :
-						warn( 'unknown configuration parameter [$cmd]' );
+					default : warn( 'unknown configuration parameter [$cmd]' );
 					}
 				}
 			}
-		} else {
-			warn( 'no config file found' );
-		}
+		} else warn( 'no config file found' );
 
-		// --- check build requirements
+		// Check build requirements
 		var requiredFiles = [
 			cfg.src,
 			//cfg.dst,
@@ -500,14 +493,12 @@ ${commands}', Context.currentPos() );
 			cfg.src+'_layout/site.html'
 		];
 		var errors = new Array<String>();
-		for( f in requiredFiles ) {
+		for( f in requiredFiles )
 			if( !FileSystem.exists( f ) )
-				errors.push( 'missing file ${cfg.src}$f' );
-		}
+				errors.push( 'missing file [${cfg.src}$f]' );
 		if( errors.length > 0 ) {
 			var m = new Array<String>();
-			for( e in errors )
-				m.push( '  $e' );
+			for( e in errors ) m.push( '  $e' );
 			error( m.join('\n') );
 		}
 
@@ -515,62 +506,59 @@ ${commands}', Context.currentPos() );
 			lastBuildDate = Date.fromString( File.getContent( BUILD_INFO_FILE ) ).getTime();
 		}
 
-		switch( cmd ) {
-		
-		case 'clean' :
-			if( FileSystem.exists( cfg.dst ) ) {
-				clearDirectory( cfg.dst );
-				FileSystem.deleteDirectory( cfg.dst );
-				println( 'project cleaned' );
-			}
-
+		switch cmd {
 		case 'build':
-
 			Console.i( 'cyberchrist > '+cfg.url );
 			posts = new Array();
-			wiki = new Wiki( {
+			markup = new Markup( {
 				imagePath : cfg.img,
 				createLink : function(s){return s;}
 			} );
 			siteTemplate = new Template( File.getContent( cfg.src+'_layout/site.html' ) );
 
-			if( FileSystem.exists( BUILD_INFO_FILE ) ) {
-				lastBuildDate = Date.fromString( File.getContent( BUILD_INFO_FILE ) ).getTime();
-			}
-			
-			//TODO
-			/*
-			if( lastBuildDate > 0 ) {
-				Console.d("ALREADY EXISTS");
-			} else {
-
-			}
-			*/
-
-			if( FileSystem.exists( cfg.dst ) ) {
-				clearDirectory( cfg.dst ); // clear target directory
-			} else {
-				FileSystem.createDirectory( cfg.dst );	
-			}
+			FileSystem.exists( cfg.dst ) ? clearDirectory( cfg.dst ) : FileSystem.createDirectory( cfg.dst );	
 
 			printPosts( cfg.src+"_posts" ); // write posts
-			processDirectory( cfg.src ); // write everything else
+			processDirectory( cfg.src ); // Write everything else
 
 			var fo = File.write( BUILD_INFO_FILE );
 			fo.writeString( Date.now().toString() );
 			fo.close();
 
-			Console.i( "\nok : "+Std.int((Timer.stamp()-ts)*1000)+"ms" );
+			//Console.i( "\nok : "+Std.int((Timer.stamp()-timestamp)*1000)+"ms" );
+			Console.i( '\nok : ${Std.int((Timer.stamp()-timestamp)*1000)}ms' );
+
+		case 'clean' :
+			if( FileSystem.exists( cfg.dst ) ) {
+				clearDirectory( cfg.dst );
+				FileSystem.deleteDirectory( cfg.dst );
+				println( 'Cleaned' );
+			}
 
 		case 'config':
 			Console.i( 'path : '+Sys.getCwd() );
 			if( lastBuildDate != -1 )
-				Console.i( 'last build : '+Date.fromTime( lastBuildDate ) );
+				Console.i( 'Last build : '+Date.fromTime( lastBuildDate ) );
 			else
-				Console.i( 'project never built so far' );
-			for( f in Reflect.fields( cfg ) )
-				Console.i( '  $f : '+Reflect.field( cfg, f ) );
+				Console.i( 'Project not built' );
+			for( f in Reflect.fields( cfg ) ) Console.i( '  $f : '+Reflect.field( cfg, f ) );
 			exit();
 		}
 	}
+
+	macro static function buildHelp() {
+		var commands = [
+		'build : Build project',
+		'release : Build project in release mode',
+		'clean : Remove all generated files',
+		'config : Print project config',
+		'help : Print this help',
+		'version : Print cyberchrist version'
+		].map( function(v){ return '    '+v; } ).join('\n');
+  		return Context.makeExpr( 'Cyberchrist $VERSION
+  Usage : cyberchrist <command>
+  Commands :
+${commands}', Context.currentPos() );
+	}
+
 }
