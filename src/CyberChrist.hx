@@ -247,8 +247,11 @@ class CyberChrist {
 		for( f in FileSystem.readDirectory( path ) ) {
 			if( f.startsWith(".") )
 				continue;
-			if( !e_post_filename.match( f ) )
-				error( 'invalid filename for post [$f]' );
+			if( !e_post_filename.match( f ) ) {
+				//error( 'invalid filename for post [$f]' );
+				warn( 'invalid filename for post [$f]' );
+				continue;
+			}
 			// Create site object
 			var site : Site = parseSite( path, f );
 			if( site.layout == null )
@@ -327,7 +330,7 @@ class CyberChrist {
 	static function createBaseContext( ?attach : Dynamic ) : Dynamic {
 		var _posts = posts;
 		var _archive = new Array<Post>();
-		if( posts.length > cfg.num_index_posts ) {
+		if( cfg.num_index_posts > 0 && posts.length > cfg.num_index_posts ) {
 			_archive = _posts.slice( cfg.num_index_posts );
 			_posts = _posts.slice( 0, cfg.num_index_posts );
 		}
